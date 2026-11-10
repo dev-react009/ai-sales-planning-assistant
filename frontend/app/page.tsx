@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Bot, Send, Sparkles, User } from "lucide-react";
+import { Bot, Plus, RotateCcw, Send, Sparkles, Trash2, User } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
@@ -23,6 +23,8 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 type ChatResponse = {
+  id?: string;
+  conversation_id?: string;
   answer: string;
   route: string;
   sources: string[];
@@ -31,6 +33,7 @@ type ChatResponse = {
 
 type ChatMessage = {
   id: string;
+  conversation_id?: string;
   role: "user" | "assistant";
   content: string;
   route?: string;
@@ -46,7 +49,7 @@ const suggestedQuestions = [
 ];
 
 const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  process.env.NEXT_PUBLIC_API_URL || "https://sriram.curtaintools.dpdns.org";
 
 function getRouteLabel(route?: string) {
   switch (route) {
@@ -81,12 +84,61 @@ function getRouteVariant(
 
 export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    async function loadChatHistory() {
+      try {
+        const response = await fetch(`${API_URL}/api/chat/messages`);
+        if (response.ok) {
+          const data: ChatMessage[] = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setMessages(data);
+            if (data[0].conversation_id) {
+              setConversationId(data[0].conversation_id);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to load chat history from backend:", err);
+      }
+    }
+    void loadChatHistory();
+  }, []);
+
+  function handleNewChat() {
+    setConversationId(null);
+    setMessages([]);
+    setQuestion("");
+    setError("");
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 0);
+  }
+
+  async function handleDeleteChat() {
+    if (!conversationId && messages.length === 0) return;
+    const convIdToDelete = conversationId;
+    setMessages([]);
+    setConversationId(null);
+    setError("");
+    try {
+      const url = convIdToDelete
+        ? `${API_URL}/api/chat/messages?conversation_id=${convIdToDelete}`
+        : `${API_URL}/api/chat/messages`;
+      await fetch(url, {
+        method: "DELETE",
+      });
+    } catch (err) {
+      console.error("Failed to delete chat history on backend:", err);
+    }
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
@@ -120,6 +172,8 @@ export default function Home() {
         },
         body: JSON.stringify({
           question: userQuestion,
+          conversation_id: conversationId,
+          user_message_id: userMessage.id,
         }),
       });
 
@@ -129,8 +183,13 @@ export default function Home() {
 
       const data: ChatResponse = await response.json();
 
+      if (data.conversation_id) {
+        setConversationId(data.conversation_id);
+      }
+
       const assistantMessage: ChatMessage = {
-        id: crypto.randomUUID(),
+        id: data.id || crypto.randomUUID(),
+        conversation_id: data.conversation_id,
         role: "assistant",
         content: data.answer,
         route: data.route,
@@ -191,14 +250,41 @@ export default function Home() {
         <Card className="flex min-h-[calc(100vh-150px)] flex-1 flex-col overflow-hidden shadow-sm">
           <CardHeader className="border-b bg-muted/20 px-4 py-4 sm:px-6">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-medium">
-                Sales Intelligence
-              </CardTitle>
+              <div className="flex items-center gap-2">
+                <CardTitle className="text-sm font-medium">
+                  Sales Intelligence
+                </CardTitle>
 
-              <Badge variant="outline" className="gap-1">
-                <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
-                AI Decision Support
-              </Badge>
+                <Badge variant="outline" className="gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
+                  AI Decision Support
+                </Badge>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleNewChat}
+                  className="h-8 gap-1.5 text-xs font-medium border-border/80 hover:bg-primary hover:text-primary-foreground transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  New Chat
+                </Button>
+
+                {messages.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleDeleteChat}
+                    className="h-8 gap-1.5 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                    title="Delete this conversation"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete
+                  </Button>
+                )}
+              </div>
             </div>
           </CardHeader>
 

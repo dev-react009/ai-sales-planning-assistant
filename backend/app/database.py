@@ -1,8 +1,11 @@
 import os
+from pathlib import Path
 
 import psycopg
 from dotenv import load_dotenv
 
+backend_env = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(backend_env)
 load_dotenv()
 
 

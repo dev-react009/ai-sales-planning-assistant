@@ -1,9 +1,12 @@
 import json
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from groq import Groq
 
+backend_env = Path(__file__).resolve().parent.parent.parent / ".env"
+load_dotenv(backend_env)
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
